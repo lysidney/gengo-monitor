@@ -141,6 +141,7 @@ input::placeholder { color: var(--border); }
 
 /* ---- Buttons ---- */
 .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#clear-btn { grid-column: 1 / -1; }
 button {
   font-family: inherit; cursor: pointer;
   border: none; border-radius: 12px;
@@ -257,6 +258,7 @@ button:active { transform: scale(0.97); }
   <div class="btn-row">
     <button id="toggle-btn" onclick="toggleMonitor()">▶ 开始监控</button>
     <button id="notif-btn" onclick="requestNotif()">🔔 开启通知</button>
+    <button onclick="testAlert()" style="background:var(--surface2);color:var(--warn);border:0.5px solid var(--warn)">🔊 测试提醒</button>
     <button id="clear-btn" onclick="clearJobs()">清除列表</button>
   </div>
 
@@ -486,15 +488,93 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Sound ─────────────────────────────────────────────────────────────────
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+// Unlock audio context on first user tap (iOS requirement)
+document.addEventListener('touchstart', () => { try { getAudioCtx(); } catch(e){} }, { once: true });
+document.addEventListener('click',      () => { try { getAudioCtx(); } catch(e){} }, { once: true });
+
+function playAlert() {
+  try {
+    const ctx = getAudioCtx();
+    // Three rising beeps
+    [[0, 880], [0.18, 1100], [0.36, 1320]].forEach(([t, freq]) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + t);
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + t);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.25);
+      osc.start(ctx.currentTime + t);
+      osc.stop(ctx.currentTime + t + 0.3);
+    });
+  } catch(e) {}
+}
+
 // ── Notify ────────────────────────────────────────────────────────────────
 function notify(job) {
+  // 1. Sound
+  playAlert();
+
+  // 2. System notification
   if (Notification.permission === 'granted') {
-    new Notification(`💼 Gengo 新工作 $${job.price.toFixed(2)}`, {
+    const n = new Notification(`💼 Gengo 新工作 $${job.price.toFixed(2)}`, {
       body: job.title,
       icon: 'https://gengo.com/favicon.ico',
-      tag: job.id
+      tag: job.id,
+      requireInteraction: true   // stays until dismissed
     });
+    n.onclick = () => { if (job.link) window.open(job.link, '_blank'); n.close(); };
   }
+
+  // 3. In-page flash banner
+  showFlashBanner(job);
+}
+
+function showFlashBanner(job) {
+  const existing = document.getElementById('flash-banner');
+  if (existing) existing.remove();
+
+  const div = document.createElement('div');
+  div.id = 'flash-banner';
+  div.innerHTML = `
+    <div style="font-size:13px;font-weight:700;color:#0f1117;margin-bottom:4px">
+      💼 新工作！$${job.price.toFixed(2)}
+    </div>
+    <div style="font-size:12px;color:#0f1117;opacity:0.8;margin-bottom:10px;line-height:1.4">${esc(job.title)}</div>
+    <div style="display:flex;gap:8px">
+      ${job.link ? `<a href="${esc(job.link)}" target="_blank" rel="noopener"
+        style="flex:1;padding:8px;background:#0f1117;color:#34d399;border-radius:8px;
+               text-align:center;font-size:13px;font-weight:700;text-decoration:none">
+        查看工作 →</a>` : ''}
+      <button onclick="document.getElementById('flash-banner').remove()"
+        style="padding:8px 14px;background:rgba(0,0,0,0.15);border:none;border-radius:8px;
+               font-size:12px;color:#0f1117;cursor:pointer">关闭</button>
+    </div>`;
+  Object.assign(div.style, {
+    position: 'fixed', top: '16px', left: '50%', transform: 'translateX(-50%)',
+    background: '#34d399', borderRadius: '14px', padding: '14px 16px',
+    zIndex: '9999', width: 'min(360px, 90vw)',
+    boxShadow: '0 8px 32px rgba(52,211,153,0.4)',
+    animation: 'flash-in 0.3s ease'
+  });
+
+  // Add keyframe if not exists
+  if (!document.getElementById('flash-style')) {
+    const s = document.createElement('style');
+    s.id = 'flash-style';
+    s.textContent = '@keyframes flash-in{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
+    document.head.appendChild(s);
+  }
+
+  document.body.appendChild(div);
+  // Auto-dismiss after 30s
+  setTimeout(() => { if (div.parentNode) div.remove(); }, 30000);
 }
 
 // ── Clear ─────────────────────────────────────────────────────────────────
