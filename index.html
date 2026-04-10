@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gengo">
+<meta name="theme-color" content="#0f1117">
+<title>Gengo Monitor</title>
+
+<!-- PWA Manifest inline -->
+<script>
+const manifest = {
+  name: "Gengo Job Monitor",
+  short_name: "Gengo",
+  start_url: ".",
+  display: "standalone",
+  background_color: "#0f1117",
+  theme_color: "#0f1117",
+  icons: [{
+    src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%234f8ef7'/%3E%3Ctext y='.9em' font-size='72' x='12' fill='white'%3EG%3C/text%3E%3C/svg%3E",
+    sizes: "any", type: "image/svg+xml"
+  }]
+};
+const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+const link = document.createElement('link');
+link.rel = 'manifest';
+link.href = URL.createObjectURL(blob);
+document.head.appendChild(link);
+</script>
+
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #22263a;
+  --border: #2e3347;
+  --accent: #4f8ef7;
+  --green: #34d399;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: -apple-system, 'SF Pro Text', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  padding-top: calc(var(--safe-top) + 0px);
+  padding-bottom: calc(var(--safe-bottom) + 80px);
+}
+
+/* ---- Header ---- */
+header {
+  position: sticky; top: 0; z-index: 10;
+  background: rgba(15,17,23,0.85);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  padding: calc(var(--safe-top) + 12px) 20px 12px;
+  border-bottom: 0.5px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.logo {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; font-weight: 700; color: #fff; flex-shrink: 0;
+}
+h1 { font-size: 17px; font-weight: 600; flex: 1; }
+.header-badge {
+  font-size: 11px; padding: 3px 9px;
+  border-radius: 20px; font-weight: 600;
+  background: var(--green); color: #0f1117;
+  display: none;
+}
+.header-badge.show { display: block; }
+
+/* ---- Main ---- */
+main { padding: 16px; display: flex; flex-direction: column; gap: 12px; max-width: 680px; margin: 0 auto; }
+
+/* ---- Card ---- */
+.card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* ---- Settings card ---- */
+.settings-card { padding: 0; }
+.setting-row {
+  display: flex; align-items: center;
+  padding: 13px 16px;
+  gap: 12px;
+  border-bottom: 0.5px solid var(--border);
+}
+.setting-row:last-child { border-bottom: none; }
+.setting-label { font-size: 14px; color: var(--muted); flex-shrink: 0; min-width: 72px; }
+input[type=url], input[type=number] {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--text); font-size: 14px; font-family: inherit;
+  text-align: right;
+}
+input::placeholder { color: var(--border); }
+.price-wrap { display: flex; align-items: center; gap: 4px; flex: 1; justify-content: flex-end; }
+.price-wrap span { color: var(--muted); font-size: 14px; }
+
+/* ---- Status bar ---- */
+.status-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+}
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--muted); flex-shrink: 0;
+  transition: background 0.3s;
+}
+.dot.active { background: var(--green); animation: pulse 2s infinite; }
+.dot.error  { background: var(--danger); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+#status-text { flex: 1; font-size: 13px; color: var(--muted); }
+#countdown { font-size: 13px; color: var(--accent); font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; }
+
+/* ---- Stats ---- */
+.stats { display: grid; grid-template-columns: repeat(3,1fr); }
+.stat {
+  padding: 14px 8px; text-align: center;
+  border-right: 0.5px solid var(--border);
+}
+.stat:last-child { border-right: none; }
+.stat-num { font-size: 22px; font-weight: 700; }
+.stat-num.blue  { color: var(--accent); }
+.stat-num.green { color: var(--green); }
+.stat-num.warn  { color: var(--warn); }
+.stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+/* ---- Buttons ---- */
+.btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+button {
+  font-family: inherit; cursor: pointer;
+  border: none; border-radius: 12px;
+  font-size: 14px; font-weight: 600;
+  padding: 13px; transition: opacity 0.15s, transform 0.1s;
+}
+button:active { transform: scale(0.97); }
+#toggle-btn { background: var(--accent); color: #fff; }
+#toggle-btn.running { background: rgba(239,68,68,0.15); color: var(--danger); border: 0.5px solid var(--danger); }
+#notif-btn { background: var(--surface2); color: var(--muted); border: 0.5px solid var(--border); }
+#notif-btn.granted { color: var(--green); border-color: var(--green); background: rgba(52,211,153,0.08); }
+#clear-btn { background: var(--surface2); color: var(--muted); border: 0.5px solid var(--border); grid-column: 1 / -1; font-weight: 400; font-size: 13px; padding: 10px; }
+
+/* ---- Jobs ---- */
+.section-title {
+  font-size: 11px; color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.7px;
+  padding: 0 4px 8px;
+}
+#job-list { display: flex; flex-direction: column; gap: 8px; }
+.job-card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  padding: 13px 14px;
+  display: flex; gap: 10px; align-items: flex-start;
+  animation: slide-in 0.2s ease;
+  cursor: pointer; text-decoration: none;
+  transition: border-color 0.2s;
+}
+.job-card:active { opacity: 0.8; }
+.job-card.qualified { border-color: rgba(52,211,153,0.4); }
+@keyframes slide-in { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
+.job-body { flex: 1; min-width: 0; }
+.job-new {
+  display: inline-block; font-size: 9px; font-weight: 700;
+  background: var(--green); color: #0f1117;
+  padding: 1px 6px; border-radius: 4px; margin-bottom: 5px;
+}
+.job-title { font-size: 14px; line-height: 1.4; color: var(--text); }
+.job-title.dim { color: var(--muted); }
+.job-date { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.job-price { font-size: 15px; font-weight: 700; color: var(--green); flex-shrink: 0; }
+.job-price.dim { color: var(--muted); font-weight: 400; font-size: 13px; }
+
+/* ---- Empty ---- */
+.empty {
+  text-align: center; padding: 48px 0;
+  color: var(--muted); font-size: 14px; line-height: 1.8;
+}
+.empty-icon { font-size: 36px; margin-bottom: 12px; }
+
+/* ---- Install banner ---- */
+#install-banner {
+  background: rgba(79,142,247,0.1);
+  border: 0.5px solid rgba(79,142,247,0.3);
+  border-radius: 14px; padding: 13px 16px;
+  font-size: 13px; color: var(--accent); line-height: 1.5;
+  display: none;
+}
+#install-banner.show { display: block; }
+#install-banner strong { display: block; margin-bottom: 3px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">G</div>
+  <h1>Gengo Monitor</h1>
+  <div class="header-badge" id="header-badge">● 监控中</div>
+</header>
+
+<main>
+
+  <!-- Install hint (Safari) -->
+  <div id="install-banner">
+    <strong>📲 添加到主屏幕</strong>
+    Safari → 分享按钮 → 添加到主屏幕 — 即可像 App 一样使用
+  </div>
+
+  <!-- Settings -->
+  <div class="card settings-card">
+    <div class="setting-row">
+      <span class="setting-label">RSS 地址</span>
+      <input type="url" id="rss-url" placeholder="https://gengo.com/rss/..." autocapitalize="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">最低金额</span>
+      <div class="price-wrap">
+        <span>$</span>
+        <input type="number" id="min-price" value="5.00" min="0" step="0.5" style="max-width:80px">
+        <span>USD</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="card">
+    <div class="status-bar">
+      <div class="dot" id="dot"></div>
+      <span id="status-text">未启动 — 填写 RSS 地址后开始</span>
+      <span id="countdown"></span>
+    </div>
+    <div style="border-top:0.5px solid var(--border);">
+      <div class="stats">
+        <div class="stat"><div class="stat-num blue" id="total-count">0</div><div class="stat-label">本次抓取</div></div>
+        <div class="stat"><div class="stat-num green" id="match-count">0</div><div class="stat-label">符合条件</div></div>
+        <div class="stat"><div class="stat-num warn" id="alert-count">0</div><div class="stat-label">已通知</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="btn-row">
+    <button id="toggle-btn" onclick="toggleMonitor()">▶ 开始监控</button>
+    <button id="notif-btn" onclick="requestNotif()">🔔 开启通知</button>
+    <button id="clear-btn" onclick="clearJobs()">清除列表</button>
+  </div>
+
+  <!-- Last fetch -->
+  <div style="font-size:11px;color:var(--muted);text-align:center;padding:0 4px" id="last-fetch"></div>
+
+  <!-- Jobs -->
+  <div class="section-title">工作列表</div>
+  <div id="job-list">
+    <div class="empty"><div class="empty-icon">📡</div>工作将在这里显示</div>
+  </div>
+
+</main>
+
+<script>
+// ── PWA / Service Worker ──────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  const swCode = `
+    self.addEventListener('install', e => self.skipWaiting());
+    self.addEventListener('activate', e => clients.claim());
+    self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => new Response(''))));
+  `;
+  const swBlob = new Blob([swCode], {type: 'application/javascript'});
+  navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {});
+}
+
+// Show install hint on iOS Safari (not standalone)
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+if (isIOS && !isStandalone) document.getElementById('install-banner').classList.add('show');
+
+// ── State ─────────────────────────────────────────────────────────────────
+const INTERVAL = 60;
+const PROXIES = [
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  url => `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`,
+];
+
+let timer = null, cdTimer = null, countdown = INTERVAL;
+let seenIDs = new Set(), alertCount = 0, allJobs = [];
+let isRunning = false, isFirstLoad = true;
+
+// Load saved
+const saved = JSON.parse(localStorage.getItem('gm-cfg') || '{}');
+if (saved.url)   document.getElementById('rss-url').value = saved.url;
+if (saved.price) document.getElementById('min-price').value = saved.price;
+
+['rss-url','min-price'].forEach(id =>
+  document.getElementById(id).addEventListener('change', saveSettings));
+
+function saveSettings() {
+  localStorage.setItem('gm-cfg', JSON.stringify({
+    url:   document.getElementById('rss-url').value,
+    price: document.getElementById('min-price').value
+  }));
+}
+
+// ── Notification ──────────────────────────────────────────────────────────
+function requestNotif() {
+  if (!('Notification' in window)) { alert('此浏览器不支持通知'); return; }
+  Notification.requestPermission().then(syncNotifBtn);
+}
+function syncNotifBtn(perm = Notification.permission) {
+  const btn = document.getElementById('notif-btn');
+  if (perm === 'granted') { btn.textContent = '✅ 通知已开启'; btn.classList.add('granted'); }
+  else if (perm === 'denied') { btn.textContent = '🚫 通知被拒绝'; }
+}
+syncNotifBtn();
+
+// ── Monitor control ───────────────────────────────────────────────────────
+function toggleMonitor() {
+  isRunning ? stopMonitor() : startMonitor();
+}
+
+function startMonitor() {
+  const url = document.getElementById('rss-url').value.trim();
+  if (!url) { alert('请先填写 Gengo RSS 地址'); return; }
+  saveSettings();
+  isRunning = true;
+  isFirstLoad = true;
+  document.getElementById('toggle-btn').textContent = '⏹ 停止监控';
+  document.getElementById('toggle-btn').classList.add('running');
+  document.getElementById('header-badge').classList.add('show');
+  setStatus('active', '监控中...');
+  fetchJobs();
+  countdown = INTERVAL;
+  cdTimer = setInterval(() => {
+    countdown--;
+    document.getElementById('countdown').textContent = countdown + 's';
+    if (countdown <= 0) { countdown = INTERVAL; fetchJobs(); }
+  }, 1000);
+}
+
+function stopMonitor() {
+  isRunning = false;
+  clearInterval(cdTimer);
+  document.getElementById('toggle-btn').textContent = '▶ 开始监控';
+  document.getElementById('toggle-btn').classList.remove('running');
+  document.getElementById('header-badge').classList.remove('show');
+  document.getElementById('countdown').textContent = '';
+  setStatus('idle', '已停止');
+}
+
+function setStatus(state, msg) {
+  document.getElementById('dot').className = 'dot' + (state === 'active' ? ' active' : state === 'error' ? ' error' : '');
+  document.getElementById('status-text').textContent = msg;
+}
+
+// ── Fetch ─────────────────────────────────────────────────────────────────
+async function fetchJobs() {
+  const url = document.getElementById('rss-url').value.trim();
+  const minPrice = parseFloat(document.getElementById('min-price').value) || 0;
+  if (!url) return;
+
+  for (let i = 0; i < PROXIES.length; i++) {
+    setStatus('active', `抓取中 (代理 ${i+1}/${PROXIES.length})...`);
+    try {
+      const proxyURL = PROXIES[i](url);
+      const res = await fetch(proxyURL, { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) continue;
+      const text = await res.text();
+
+      let items;
+      if (proxyURL.includes('allorigins')) {
+        const j = JSON.parse(text);
+        items = parseXML(j.contents || '');
+      } else if (proxyURL.includes('rss2json')) {
+        const j = JSON.parse(text);
+        if (j.status !== 'ok') continue;
+        items = j.items.map(it => ({
+          title: it.title, link: it.link,
+          pubDate: it.pubDate,
+          description: it.content || it.description || '',
+          guid: it.guid || it.link
+        }));
+      } else {
+        items = parseXML(text);
+      }
+
+      processItems(items, minPrice);
+      return;
+    } catch(e) { if (i === PROXIES.length - 1) setStatus('error', '抓取失败：' + e.message); }
+  }
+}
+
+// ── XML Parser ────────────────────────────────────────────────────────────
+function parseXML(xml) {
+  const doc = new DOMParser().parseFromString(xml, 'text/xml');
+  return [...doc.querySelectorAll('item')].map(it => ({
+    title:       it.querySelector('title')?.textContent?.trim() || '',
+    link:        it.querySelector('link')?.textContent?.trim() || '',
+    pubDate:     it.querySelector('pubDate')?.textContent?.trim() || '',
+    description: it.querySelector('description')?.textContent?.trim() || '',
+    guid:        it.querySelector('guid')?.textContent?.trim() || it.querySelector('link')?.textContent?.trim() || '',
+  }));
+}
+
+// ── Process ───────────────────────────────────────────────────────────────
+function processItems(items, minPrice) {
+  const now = new Date().toLocaleTimeString('zh-CN');
+  document.getElementById('last-fetch').textContent = `最后抓取：${now}`;
+  document.getElementById('total-count').textContent = items.length;
+  setStatus('active', `✅ 已连接 — 共 ${items.length} 条`);
+
+  let matched = 0;
+  const jobs = items.map(item => {
+    const price = extractPrice((item.description || '') + item.title);
+    if (price >= minPrice) matched++;
+    const id = item.guid || item.link;
+    const isNew = !seenIDs.has(id);
+    if (isNew) seenIDs.add(id);
+    return { ...item, price, isNew, id };
+  });
+
+  document.getElementById('match-count').textContent = matched;
+
+  if (!isFirstLoad) {
+    const newQualified = jobs.filter(j => j.isNew && j.price >= minPrice);
+    newQualified.forEach(j => notify(j));
+    alertCount += newQualified.length;
+    document.getElementById('alert-count').textContent = alertCount;
+  }
+  isFirstLoad = false;
+
+  allJobs = jobs.sort((a, b) => {
+    const qa = a.price >= minPrice, qb = b.price >= minPrice;
+    if (qa !== qb) return qb - qa;
+    return b.price - a.price;
+  });
+  renderJobs(allJobs, minPrice);
+}
+
+function extractPrice(text) {
+  const m = text.match(/\$\s*([\d,]+\.?\d*)|USD\s*([\d,]+\.?\d*)/i);
+  if (!m) return 0;
+  return parseFloat((m[1] || m[2]).replace(/,/g, '')) || 0;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+function renderJobs(jobs, minPrice) {
+  const list = document.getElementById('job-list');
+  if (!jobs.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>暂无工作</div>';
+    return;
+  }
+  list.innerHTML = jobs.map(j => {
+    const q = j.price >= minPrice;
+    const priceStr = j.price > 0 ? `$${j.price.toFixed(2)}` : '—';
+    return `<a class="job-card${q ? ' qualified' : ''}" href="${esc(j.link || '#')}" target="_blank" rel="noopener">
+      <div class="job-body">
+        ${j.isNew && q ? '<span class="job-new">NEW</span>' : ''}
+        <div class="job-title${q ? '' : ' dim'}">${esc(j.title || '(无标题)')}</div>
+        ${j.pubDate ? `<div class="job-date">${formatDate(j.pubDate)}</div>` : ''}
+      </div>
+      <div class="job-price${q ? '' : ' dim'}">${priceStr}</div>
+    </a>`;
+  }).join('');
+}
+
+function formatDate(s) {
+  try { return new Date(s).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+  catch { return s; }
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Notify ────────────────────────────────────────────────────────────────
+function notify(job) {
+  if (Notification.permission === 'granted') {
+    new Notification(`💼 Gengo 新工作 $${job.price.toFixed(2)}`, {
+      body: job.title,
+      icon: 'https://gengo.com/favicon.ico',
+      tag: job.id
+    });
+  }
+}
+
+// ── Clear ─────────────────────────────────────────────────────────────────
+function clearJobs() {
+  allJobs = []; seenIDs.clear(); isFirstLoad = true;
+  document.getElementById('job-list').innerHTML = '<div class="empty"><div class="empty-icon">🗑️</div>已清除</div>';
+  ['total-count','match-count'].forEach(id => document.getElementById(id).textContent = '0');
+}
+
+// ── Visibility: refresh when tab/app comes back into focus ────────────────
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && isRunning) {
+    countdown = INTERVAL;
+    fetchJobs();
+  }
+});
+</script>
+</body>
+</html>
